@@ -1,0 +1,26 @@
+# ワーク5で .github/workflows/ci.yml にコピーして使う。
+# ローカルと同じコマンドで lint / typecheck / test を実行する。CI では Claude を動かさない。
+# branch protection の必須チェックには、ジョブ名の `ci` を指定する。
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test

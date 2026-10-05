@@ -1,0 +1,43 @@
+# ワーク7で .github/workflows/deploy.yml にコピーして使う。
+# main への push（PR のマージ）で staging に模擬デプロイし、
+# production は Environments の承認（required reviewers）を待ってから実行する。
+# 事前に Settings → Environments で staging と production を作り、
+# production の Required reviewers に自分（リリース担当）を指定しておく。
+name: deploy
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+jobs:
+  staging:
+    runs-on: ubuntu-latest
+    environment: staging
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx tsx scripts/deploy.ts staging
+
+  production:
+    needs: staging
+    runs-on: ubuntu-latest
+    environment: production # Required reviewers の承認待ちで止まる
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx tsx scripts/deploy.ts production

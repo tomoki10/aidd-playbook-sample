@@ -1,0 +1,151 @@
+openapi: 3.0.3
+info:
+  title: 備品貸出 API
+  version: 0.1.0
+  description: |
+    社内備品の貸出を管理する API。
+    認証は `Authorization: Bearer <token>`（研修では利用者 ID がトークン）。
+    components.schemas を変更したら `npm run generate` で src/generated/types.ts を作り直す。
+paths:
+  /items:
+    get:
+      summary: 備品の一覧（認証不要）
+      responses:
+        "200":
+          description: 備品の一覧
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ItemList"
+  /loans:
+    post:
+      summary: 備品を借りる（借り手はログイン中の利用者）
+      security:
+        - bearer: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateLoanRequest"
+      responses:
+        "201":
+          description: 貸出を作成した
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LoanEnvelope"
+        "400":
+          description: 入力が不正
+        "401":
+          description: 未認証
+        "404":
+          description: 備品が存在しない
+        "409":
+          description: 備品が貸出中
+  /loans/{id}/return:
+    post:
+      summary: 貸出を返却する（借り手本人または管理者）
+      security:
+        - bearer: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: 返却した
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LoanEnvelope"
+        "401":
+          description: 未認証
+        "404":
+          description: 貸出が存在しない、または本人の貸出ではない
+        "409":
+          description: 返却済み
+components:
+  securitySchemes:
+    bearer:
+      type: http
+      scheme: bearer
+  schemas:
+    Item:
+      type: object
+      required: [id, name, category, available]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        category:
+          type: string
+          enum: [pc, monitor, camera, projector, other]
+        available:
+          type: boolean
+    ItemList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Item"
+    BorrowerSummary:
+      description: API で返す借り手の情報。email と phone は含めない
+      type: object
+      required: [id, name]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+    Loan:
+      type: object
+      required: [id, itemId, borrower, loanedAt, dueDate, returnedAt, extensionCount]
+      properties:
+        id:
+          type: string
+        itemId:
+          type: string
+        borrower:
+          $ref: "#/components/schemas/BorrowerSummary"
+        loanedAt:
+          type: string
+          format: date
+        dueDate:
+          type: string
+          format: date
+        returnedAt:
+          type: string
+          format: date
+          nullable: true
+        extensionCount:
+          type: integer
+    LoanEnvelope:
+      type: object
+      required: [loan]
+      properties:
+        loan:
+          $ref: "#/components/schemas/Loan"
+    CreateLoanRequest:
+      type: object
+      required: [itemId]
+      properties:
+        itemId:
+          type: string
+    ErrorResponse:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code:
+              type: string
+            message:
+              type: string

@@ -1,0 +1,10 @@
+node_modules/
+dist/
+coverage/
+.env
+.env.*
+*.log
+.DS_Store
+# Claude Code の個人設定と worktree
+.claude/settings.local.json
+.claude/worktrees/

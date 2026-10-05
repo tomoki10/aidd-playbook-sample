@@ -1,0 +1,35 @@
+name: 要望
+description: 機能の要望や困りごとを起票する（Plan 工程の入口）
+title: "[要望] "
+labels: ["intent"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        要望は会議ではなく、この Issue で受け付けます。
+        起案者はこの Issue を起点に Claude と壁打ちし、docs/intents/<機能名>.md を書いて PR を出します。
+  - type: textarea
+    id: problem
+    attributes:
+      label: 困っていること
+      description: 誰が、どんな場面で、何に困っているか
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: こうなってほしい
+      description: 解決したときに何ができるようになっているか
+    validations:
+      required: true
+  - type: input
+    id: requester
+    attributes:
+      label: 起案者（部署）
+    validations:
+      required: true
+  - type: textarea
+    id: notes
+    attributes:
+      label: 補足
+      description: 期限、関係する部署、気になっていることなど

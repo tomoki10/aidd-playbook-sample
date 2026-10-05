@@ -1,0 +1,12 @@
+# Maintain 工程の応答の段階。閾値と応答を変えるときは、このファイルを PR で変える。
+# scripts/detect-anomaly.ts がこの設定を読み、当日の値を判定して tier=0〜3 を出力する。
+# 検知にはモデルの判断を入れない。GitHub Actions 上では Claude を実行しない。
+metric: metrics/error-rate.json
+window_days: 28 # 当日を除く直近28日の平均と標準偏差を基準にする
+tiers:
+  - sigma: 1
+    action: record # Job Summary に記録するだけ
+  - sigma: 2
+    action: diagnose # 担当者がローカルの Claude Code に読み取り専用で診断させる
+  - sigma: 3
+    action: propose # triage ラベルの Issue を起票し、診断を docs/intents/ の intent.md にする
