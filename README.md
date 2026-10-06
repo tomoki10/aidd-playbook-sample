@@ -25,7 +25,7 @@ GitHub 上では Claude を実行しません。AI レビューや診断は、�
 `gh` で作る場合は次のとおりです。
 
 ```bash
-gh repo create <自分のリポジトリ名> --template <講師の org>/aidd-playbook-sample --include-all-branches --public --clone
+gh repo create <自分のリポジトリ名> --template tomoki10/aidd-playbook-sample --include-all-branches --public --clone
 cd <自分のリポジトリ名>
 ```
 
@@ -106,7 +106,7 @@ curl -X POST -H 'Authorization: Bearer u-alice' -H 'Content-Type: application/js
 └── docs/
     ├── intents/               # intent.md（返却機能の記入例、機能 B）
     ├── specs/                 # spec.md（返却機能の記入例、機能 B）
-    ├── plans/                 # plan.md（返却機能の記入例）
+    ├── plans/                 # plan.md（返却機能の記入例）、分割計画（機能 B）
     └── workshop/              # 講師用の要望文とチェックリスト
 ```
 
@@ -121,20 +121,26 @@ curl -X POST -H 'Authorization: Bearer u-alice' -H 'Content-Type: application/js
 | 1 | Plan | 要望 Issue を起票し、Claude と壁打ちして intent を書く | Issue（`request.yml`）、`docs/intents/overdue-loans.md` |
 | 2 | Design | marketplace を登録して `secure-api` Skill を有効にし、spec を書く | `.claude/settings.json`、`docs/specs/overdue-loans.md` |
 | 3 | Build（土台） | CLAUDE.md を整え、Biome と生成物保護の Hook を入れる | `CLAUDE.md`、`.claude/settings.json` |
-| 4 | Build（並行実装） | Issue を2つ（`implementation.md`）起票し、spec のシグネチャで `listOverdue` のスタブを main にコミットしてから、worktree 2本で plan → 実装。A2 のテストは `vi.mock` でスタブを差し替える | `docs/plans/overdue-loans-a1.md` / `-a2.md`、`src/loans/domain/overdue.ts`、`src/loans/routes.ts`、`src/loans/routes.overdue.test.ts` |
+| 4 | Build（並行実装） | Plan モードで分割計画を作って main にコミットし、Issue を2つ（`implementation.md`）起票する。分割計画のシグネチャで `listOverdue` のスタブを main にコミットしてから、worktree 2本で plan → 実装。A2 のテストは `vi.mock` でスタブを差し替える | `docs/plans/overdue-loans.md`（分割計画）、`docs/plans/overdue-loans-a1.md` / `-a2.md`、`src/loans/domain/overdue.ts`、`src/loans/routes.ts`、`src/loans/routes.overdue.test.ts` |
 | 5 | Test | CI とテスト保護 Hook を入れ、機能 B の受入テストを feat ブランチにコミット | `.github/workflows/ci.yml`、`.claude/settings.json`、`src/loans/domain/extension.test.ts`、`src/loans/routes.extension.test.ts` |
-| 6 | Build（2周目） | 受入テストを起点に worktree 2本で plan → 実装 | `docs/plans/loan-extension-b1.md` / `-b2.md`、`src/loans/domain/extension.ts`、`src/loans/routes.ts` |
+| 6 | Build（2周目） | 講師が用意した分割計画に沿って、受入テストを起点に worktree 2本で plan → 実装 | `docs/plans/loan-extension-b1.md` / `-b2.md`、`src/loans/domain/extension.ts`、`src/loans/routes.ts` |
 | 7 | Deploy | REVIEW.md、ローカルでの AI レビュー、deploy ワークフロー、Environments、branch protection、リリース承認 Hook | `REVIEW.md`、`.github/workflows/deploy.yml`、`.claude/settings.json` |
 | 8 | Maintain | maintain ワークフローを main にマージし、3σ を超える値を追加したブランチで手動起動して、起票された Issue をローカルで診断して intent を書く | `.github/workflows/maintain.yml`、`docs/intents/<診断>.md` |
 
-ワーク1の要望文は `docs/workshop/requests.md` にあります。機能 B の intent と spec は講師が用意済みです（`docs/intents/loan-extension.md`、`docs/specs/loan-extension.md`）。main には spec のシグネチャだけを持つスタブ `src/loans/domain/extension.ts` を置いてあり、B2 のテストは `vi.mock` でこれを差し替えるので、B1 と B2 をそれぞれ単独で CI 緑にできます。
+ワーク1の要望文は `docs/workshop/requests.md` にあります。機能 B の intent、spec、分割計画は講師が用意済みです（`docs/intents/loan-extension.md`、`docs/specs/loan-extension.md`、`docs/plans/loan-extension.md`）。main には分割計画のシグネチャだけを持つスタブ `src/loans/domain/extension.ts` を置いてあり、B2 のテストは `vi.mock` でこれを差し替えるので、B1 と B2 をそれぞれ単独で CI 緑にできます。
+
+### spec と分割計画
+
+spec の見出しは「要件／設計／intent の制約をどう満たすか／intent から持ち越した未解決の問い／懸念点」です。要件は R 番号を付けて、利用者から見た振る舞いとして書きます。設計は方針（どこに何を足すか、何を持たないか）に留めます。リクエストとレスポンスの項目、エラーのステータスや code、関数のシグネチャ、型は spec に書かず、分割計画、各タスクの plan、テストの側に置きます。
+
+並行に実装するときは、Build の最初に分割計画 `docs/plans/<機能名>.md` を作ります。見出しは「変更するファイル／作業順／リスク／成功を示すテスト」です。変更するファイルにはタスクの分け方、タスクの境目の関数のシグネチャ、API の応答とエラーを、作業順にはスタブから各タスクのマージまでの順番を、成功を示すテストには spec の要件（R 番号）に対応づけたタスクごとの受入テストを書きます。各タスクの plan（`docs/plans/<機能名>-<タスクID>.md`）は、分割計画を前提に、同じ4つの見出しで書きます。
 
 ### worktree での並行開発
 
 ワーク4・6では worktree を2本立てます。worktree は `.claude/worktrees/` に置き、`.gitignore` で除外しています。
 
 ```bash
-# ワーク4: listOverdue のスタブを main にコミットしてから、新しいブランチで2本始める
+# ワーク4: 分割計画と listOverdue のスタブを main にコミットしてから、新しいブランチで2本始める
 claude --worktree a1-domain
 claude --worktree a2-api
 # ワーク6: ワーク5で受入テストをコミットした既存ブランチを起点にする
@@ -226,7 +232,7 @@ gh pr create --fill
 | `stage-1-done` | `docs/intents/overdue-loans.md` | 緑 |
 | `stage-2-done` | `docs/specs/overdue-loans.md`、`.claude/settings.json`（marketplace 登録） | 緑 |
 | `stage-3-done` | CLAUDE.md の整備、`block-generated.sh` / `biome.sh` の Hook 登録 | 緑 |
-| `stage-4-done` | `listOverdue` のスタブ → A1（`docs/plans/overdue-loans-a1.md`、ドメイン関数）→ A2（`docs/plans/overdue-loans-a2.md`、API と `vi.mock` を使うテスト）の順に積んだ状態 | 緑 |
+| `stage-4-done` | 分割計画（`docs/plans/overdue-loans.md`）→ `listOverdue` のスタブ → A1（`docs/plans/overdue-loans-a1.md`、ドメイン関数）→ A2（`docs/plans/overdue-loans-a2.md`、API と `vi.mock` を使うテスト）の順に積んだ状態 | 緑 |
 | `stage-5-done` | `.github/workflows/ci.yml`、`protect-tests.sh` の Hook 登録、B1 / B2 の受入テスト | **赤**（受入テストが実装前のため意図どおり失敗。lint と typecheck は緑） |
 | `stage-6-done` | `docs/plans/loan-extension-b1.md` / `-b2.md`、機能 B の実装 | 緑 |
 | `stage-7-done` | `REVIEW.md`、`.github/workflows/deploy.yml`、`require-release-approval.sh` の Hook 登録 | 緑 |
@@ -257,4 +263,4 @@ git push -u origin feat/b2-extend-api
 
 `stage-6-done` に追いつくときは、通常どおり `git checkout origin/stage-6-done -- .` で取り込めます（受入テストと実装の両方が入り、緑になります）。
 
-ワーク2の `.claude/settings.json` にある marketplace の `repo` は講師の org を指しています。講師が当日提示する値に合わせてください。
+ワーク2の `.claude/settings.json` にある marketplace の `repo` は `tomoki10/aidd-playbook-marketplace` を指しています。
