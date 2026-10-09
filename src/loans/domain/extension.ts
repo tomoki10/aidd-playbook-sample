@@ -2,7 +2,7 @@ import type { ISODate } from "../../lib/date.ts";
 import type { Loan } from "./loan.ts";
 
 /**
- * 貸出の延長（機能 B）。分割計画 docs/plans/loan-extension.md で決めた境目の関数だけを先に置いたスタブ。
+ * 貸出の延長（機能 B）。実装 Issue（docs/workshop/issues/loan-extension-b1.md）で決めた境目の関数だけを先に置いたスタブ。
  * 本体は B1（feat/b1-extend-domain）で実装する。
  * B2（API）はこのシグネチャに沿ってルートを書き、テストでは vi.mock でこの関数を差し替える。
  */
