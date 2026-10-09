@@ -1,0 +1,57 @@
+# ワーク8で .github/workflows/maintain.yml にコピーし、main にマージしてから使う。
+# （workflow_dispatch のワークフローは、既定ブランチに存在しないと手動起動できない）
+# 決定論的なスクリプトでメトリクスを判定し、3σ を超えたときだけ triage ラベルの Issue を起票する。
+# 検知にも起票にも Claude は使わない。診断はローカルの Claude Code で読み取り専用で行う。
+#
+# 手動起動: gh workflow run maintain.yml --ref <3σ を超える値を追加したブランチ>
+name: maintain
+
+on:
+  schedule:
+    - cron: "0 0 * * *" # 毎日 09:00 JST
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  detect:
+    runs-on: ubuntu-latest
+    outputs:
+      tier: ${{ steps.detect.outputs.tier }}
+      date: ${{ steps.detect.outputs.date }}
+      z: ${{ steps.detect.outputs.z }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - id: detect
+        run: npx tsx scripts/detect-anomaly.ts >> "$GITHUB_OUTPUT" # tier=0〜3 と判定の数値
+
+  propose:
+    needs: detect
+    if: needs.detect.outputs.tier == '3'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: 判定結果を Markdown にする
+        run: npx tsx scripts/detect-anomaly.ts --report > report.md
+      - name: triage Issue を起票する
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DATE: ${{ needs.detect.outputs.date }}
+          Z: ${{ needs.detect.outputs.z }}
+        run: |
+          gh issue create \
+            --title "エラー率の異常（${DATE}、z=${Z}）" \
+            --label triage \
+            --body-file report.md
