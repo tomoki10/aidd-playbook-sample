@@ -1,0 +1,10 @@
+{
+  "extraKnownMarketplaces": {
+    "aidd-playbook-marketplace": {
+      "source": { "source": "github", "repo": "tomoki10/aidd-playbook-marketplace" }
+    }
+  },
+  "enabledPlugins": {
+    "secure-api@aidd-playbook-marketplace": true
+  }
+}
