@@ -2,8 +2,8 @@
 
 研修「Claude Code チーム開発実践〜AI-native な開発サイクルを体験する〜」の題材リポジトリです。社内備品の貸出を管理する小さな Web API（TypeScript / Hono）に、Anthropic の AI-native SDLC Playbook の6工程（Plan → Design → Build → Test → Deploy → Maintain）に沿って機能を追加します。
 
-- 1周目（Day1）: 機能 A「返却期限超過一覧 API」（`GET /loans/overdue`）を Plan → Design → Build で作る
-- 2周目（Day2）: 機能 B「貸出の延長 API」（`POST /loans/:id/extend`）を、検証の仕組みを先に仕込んでから Build し、Deploy まで通す。最後に Maintain で次の周の `intent.md` をつくる
+- 1周目（Day1）: 機能 A「備品の空き状況と自分の貸出の確認」（機能名 `borrowing-status`）を Plan → Design → Build で作る。A1 は備品の絞り込み（`GET /items?category=&available=`）、A2 は自分の貸出の一覧（`GET /loans/me`）で、互いの関数を呼ばない2つの作業を並行に実装する
+- 2周目（Day2）: 機能 B「貸出の延長 API」（`POST /loans/:id/extend`）を、検証の仕組みを先に仕込んでから Build し、Deploy まで通す。B2（API）は B1（ドメイン関数）を呼ぶので、境目の関数を決めてから並行に実装する。最後に Maintain で次の周の `intent.md` をつくる
 
 GitHub 上では Claude を実行しません。AI レビューや診断は、すべてローカルの Claude Code で行います。
 
@@ -18,20 +18,19 @@ GitHub 上では Claude を実行しません。AI レビューや診断は、�
 
 ### テンプレートから自分のリポジトリを作る
 
-1. このリポジトリの「Use this template」→「Create a new repository」を選ぶ
-2. **「Include all branches」にチェックを入れる**（追いつき用の `stage-N-done` ブランチを使うため）
-3. 作成したリポジトリをクローンする
-
-`gh` で作る場合は次のとおりです。
-
 ```bash
-gh repo create <自分のリポジトリ名> --template tomoki10/aidd-playbook-sample --include-all-branches --public --clone
-cd <自分のリポジトリ名>
+gh repo create aidd-playbook-sample \
+  --template tomoki10/aidd-playbook-sample \
+  --include-all-branches --public --clone
+cd aidd-playbook-sample
+git branch -r   # origin/stage-1-done 〜 origin/stage-8-done が見えれば OK
 ```
+
+ブラウザで作る場合は「Use this template」→「Create a new repository」を選び、**「Include all branches」にチェックを入れます**（追いつき用の `stage-N-done` ブランチを使うため）。
 
 ### ラベルを作る
 
-テンプレートからはラベルがコピーされないので、最初に作ります。
+テンプレートからはラベルがコピーされないので、最初に作ります。`gh label list` で確かめ、無いものだけ作ります。
 
 ```bash
 gh label create intent --color 1D76DB --description "要望・次の周の intent の起点"
@@ -45,7 +44,7 @@ gh label create triage --color D93F0B --description "Maintain の検知で起票
 npm ci
 npm run lint
 npm run typecheck
-npm test
+npm test      # Tests  42 passed
 npm run dev   # http://localhost:3000
 ```
 
@@ -74,7 +73,7 @@ curl -X POST -H 'Authorization: Bearer u-alice' -H 'Content-Type: application/js
 
 貸出（`src/loans/domain/loan.ts` の `Loan`）は、借り手の個人情報（`email`、`phone`、`department`）、返却期限 `dueDate`、延長回数 `extensionCount`（初期値0）を持ちます。API の応答では借り手を `{ id, name }` に絞っています（`src/loans/presenter.ts`）。
 
-`npm run dev` の初期データは実行日に合わせて日付をずらすので、いつ起動しても「期限超過」「今日が期限」「期限内」「返却済み」の貸出がそろいます。テストは基準日 2026-10-01 に固定しています。
+`npm run dev` の初期データは実行日に合わせて日付をずらすので、いつ起動しても「期限超過」「今日が期限」「期限内」「返却済み」の貸出がそろいます。貸出中の備品は起動日によらず同じで、いま借りられる備品は `monitor-02` と `camera-01` の2つ、`u-alice` の貸出中は L-0001（`pc-01`）と L-0006（`camera-02`）の2件です。テストは基準日 2026-10-01 に固定しています。
 
 ## ディレクトリ構成
 
@@ -87,9 +86,9 @@ curl -X POST -H 'Authorization: Bearer u-alice' -H 'Content-Type: application/js
 │   ├── server.ts              # npm run dev の起動点
 │   ├── auth/                  # 簡易認証（固定のトークン表）
 │   ├── audit/                 # 監査ログ（インメモリ）
-│   ├── items/                 # 備品
+│   ├── items/routes.ts        # 備品の API（ワーク4の A1 で絞り込みを足す）
 │   ├── loans/
-│   │   ├── routes.ts          # 貸出の API
+│   │   ├── routes.ts          # 貸出の API（ワーク4の A2 で自分の貸出の一覧を足す）
 │   │   ├── presenter.ts       # 応答への変換（個人情報を落とす）
 │   │   └── domain/            # ドメイン関数（lend.ts / return.ts、機能 B のスタブ extension.ts）
 │   ├── generated/types.ts     # openapi.yaml から生成。直接編集しない（Hook で保護する）
@@ -106,49 +105,86 @@ curl -X POST -H 'Authorization: Bearer u-alice' -H 'Content-Type: application/js
 └── docs/
     ├── intents/               # intent.md（返却機能の記入例、機能 B）
     ├── specs/                 # spec.md（返却機能の記入例、機能 B）
-    ├── plans/                 # plan.md（返却機能の記入例）、分割計画（機能 B）
-    └── workshop/              # 講師用の要望文とチェックリスト
+    ├── plans/                 # plan.md（返却機能の記入例）
+    └── workshop/              # 講師用の要望文、チェックリスト、機能 B の実装 Issue の本文（issues/）
 ```
 
 テストは対象と同じディレクトリに `*.test.ts` で置きます。
 
 ## 研修の流れ
 
-各ワークは「作業ブランチで作る → PR を出す → 役を切り替えてセルフレビュー → マージ」で進めます。チェックリストは `docs/workshop/checklists.md` にあります。
+各ワークは「作業ブランチで作る → PR を出す → 役を切り替えてセルフレビュー → マージ」で進めます。マージは merge commit で行います（squash しない）。チェックリストは `docs/workshop/checklists.md` にあります。
 
 | ワーク | 工程 | 作るもの | 置き場所 |
 |---|---|---|---|
-| 1 | Plan | 要望 Issue を起票し、Claude と壁打ちして intent を書く | Issue（`request.yml`）、`docs/intents/overdue-loans.md` |
-| 2 | Design | marketplace を登録して `secure-api` Skill を有効にし、spec を書く | `.claude/settings.json`、`docs/specs/overdue-loans.md` |
+| 1 | Plan | 要望 Issue を起票し、Claude と壁打ちして intent を書く | Issue（`request.yml`）、`docs/intents/borrowing-status.md` |
+| 2 | Design | marketplace を登録して `secure-api` Skill を有効にし、spec を書く | `.claude/settings.json`、`docs/specs/borrowing-status.md` |
 | 3 | Build（土台） | CLAUDE.md を整え、Biome と生成物保護の Hook を入れる | `CLAUDE.md`、`.claude/settings.json` |
-| 4 | Build（並行実装） | Plan モードで分割計画を作って main にコミットし、Issue を2つ（`implementation.md`）起票する。分割計画のシグネチャで `listOverdue` のスタブを main にコミットしてから、worktree 2本で plan → 実装。A2 のテストは `vi.mock` でスタブを差し替える | `docs/plans/overdue-loans.md`（分割計画）、`docs/plans/overdue-loans-a1.md` / `-a2.md`、`src/loans/domain/overdue.ts`、`src/loans/routes.ts`、`src/loans/routes.overdue.test.ts` |
-| 5 | Test | CI とテスト保護 Hook を入れ、機能 B の受入テストを feat ブランチにコミット | `.github/workflows/ci.yml`、`.claude/settings.json`、`src/loans/domain/extension.test.ts`、`src/loans/routes.extension.test.ts` |
-| 6 | Build（2周目） | 講師が用意した分割計画に沿って、受入テストを起点に worktree 2本で plan → 実装 | `docs/plans/loan-extension-b1.md` / `-b2.md`、`src/loans/domain/extension.ts`、`src/loans/routes.ts` |
+| 4 | Build（並行実装） | spec から実装 Issue を2つ（`implementation.md`）起票し、worktree 2本で plan → 実装。A1 と A2 は互いの関数を呼ばないので、スタブもマージの順番も要らない | `docs/plans/borrowing-status-a1-search.md` / `-a2-my-loans.md`、`src/items/routes.ts`、`src/loans/routes.ts`、`openapi.yaml` |
+| 5 | Test | CI とテスト保護 Hook を main に入れ、機能 B の実装 Issue を起票し、受入テストを feat ブランチにコミット | `.github/workflows/ci.yml`、`.claude/settings.json`、`src/loans/domain/extension.test.ts`、`src/loans/routes.extension.test.ts` |
+| 6 | Build（2周目） | 受入テストを起点に worktree 2本で plan → 実装 | `docs/plans/loan-extension-b1-logic.md` / `-b2-api.md`、`src/loans/domain/extension.ts`、`src/loans/routes.ts` |
 | 7 | Deploy | REVIEW.md、ローカルでの AI レビュー、deploy ワークフロー、Environments、branch protection、リリース承認 Hook | `REVIEW.md`、`.github/workflows/deploy.yml`、`.claude/settings.json` |
-| 8 | Maintain | maintain ワークフローを main にマージし、3σ を超える値を追加したブランチで手動起動して、起票された Issue をローカルで診断して intent を書く | `.github/workflows/maintain.yml`、`docs/intents/<診断>.md` |
+| 8 | Maintain | maintain ワークフローを main にマージし、3σ を超える値を追加したブランチで手動起動して、起票された Issue をローカルで診断して intent を書く | `.github/workflows/maintain.yml`、`docs/intents/error-rate-spike.md` |
 
-ワーク1の要望文は `docs/workshop/requests.md` にあります。機能 B の intent、spec、分割計画は講師が用意済みです（`docs/intents/loan-extension.md`、`docs/specs/loan-extension.md`、`docs/plans/loan-extension.md`）。main には分割計画のシグネチャだけを持つスタブ `src/loans/domain/extension.ts` を置いてあり、B2 のテストは `vi.mock` でこれを差し替えるので、B1 と B2 をそれぞれ単独で CI 緑にできます。
+ワーク1の要望文は `docs/workshop/requests.md` にあります。機能 B の intent と spec、B1・B2 の実装 Issue の本文は講師が用意済みです（`docs/intents/loan-extension.md`、`docs/specs/loan-extension.md`、`docs/workshop/issues/loan-extension-b1.md` / `-b2.md`）。
 
-### spec と分割計画
+### spec
 
-spec の見出しは「要件／設計／intent の制約をどう満たすか／intent から持ち越した未解決の問い／懸念点」です。要件は R 番号を付けて、利用者から見た振る舞いとして書きます。設計は方針（どこに何を足すか、何を持たないか）に留めます。リクエストとレスポンスの項目、エラーのステータスや code、関数のシグネチャ、型は spec に書かず、分割計画、各タスクの plan、テストの側に置きます。
+spec（`docs/specs/<機能名>.md`）の冒頭には、元の intent、状態、適用した Skill を書きます。見出しは「要件／設計／intent の制約をどう満たすか／intent で解決しない問い／懸念点」です。
 
-並行に実装するときは、Build の最初に分割計画 `docs/plans/<機能名>.md` を作ります。見出しは「変更するファイル／作業順／リスク／成功を示すテスト」です。変更するファイルにはタスクの分け方、タスクの境目の関数のシグネチャ、API の応答とエラーを、作業順にはスタブから各タスクのマージまでの順番を、成功を示すテストには spec の要件（R 番号）に対応づけたタスクごとの受入テストを書きます。各タスクの plan（`docs/plans/<機能名>-<タスクID>.md`）は、分割計画を前提に、同じ4つの見出しで書きます。
+- 要件は R 番号を付けて、利用者から見た振る舞いとして書く
+- 設計は方針（どこに何を足すか、何を持たないか）に留める
+- リクエストとレスポンスの項目、エラーのステータスや code、関数のシグネチャ、型は spec に書かない。実装 Issue、plan、テストの側で決める
+
+### 実装 Issue
+
+Build の最初に、spec から実装 Issue（`.github/ISSUE_TEMPLATE/implementation.md`）を起票し、作業単位の分け方を決めます。項目は「spec／タスク ID／範囲（触る・触らない）／境目の関数／受入テスト／完了の確かめ方」です。
+
+- 範囲は、並行するほかの Issue と同じファイルを触らないように書く。Day1 の A1・A2 が共有するのは `openapi.yaml` と `src/generated/`（`npm run generate` で再生成）だけ
+- 境目の関数は、互いの関数を呼ぶ場合だけ書く。Day1 の A1・A2 は「なし」。Day2 の B2 は B1 の `extendLoan` を呼ぶので、シグネチャを書き、main にスタブ（`src/loans/domain/extension.ts`）を置く
+- API を足す・変えるときは、応答とエラーコードの一覧を本文に足す。マージの順番が必要なら（Day2 は B1 が先）、本文に書く
+
+ワーク4では Claude に下書きさせて起票し、`ready-for-agent` ラベルを付けます。ワーク5では、用意済みの本文から起票します。
+
+```bash
+gh issue create --label ready-for-agent --title "[実装] B1: 貸出延長のドメイン関数 extendLoan" \
+  --body-file docs/workshop/issues/loan-extension-b1.md
+gh issue create --label ready-for-agent --title "[実装] B2: POST /loans/:id/extend" \
+  --body-file docs/workshop/issues/loan-extension-b2.md
+```
+
+### plan
+
+`plan.md` 1本 = worktree 1本 = PR 1本です。Issue ごとに、それぞれの worktree の Plan モードで `docs/plans/<機能名>-<タスク ID>-<内容>.md` を作り、実装より先にコミットします（例: `docs/plans/borrowing-status-a1-search.md`）。
+
+見出しは Approach（進め方。番号付きで数行）／Risks（リスク）／Verification（確かめ方）の3つで、数行ずつの粗い粒度です。spec の要件をその作業でどう満たし、どう確かめるかの言葉で書き、ファイル名、関数の中身、テストの一覧は書きません。触ってよい範囲と境目の関数は Issue で決まっているので、plan では繰り返しません。記入例は `docs/plans/loan-return.md` です。
 
 ### worktree での並行開発
 
 ワーク4・6では worktree を2本立てます。worktree は `.claude/worktrees/` に置き、`.gitignore` で除外しています。
 
 ```bash
-# ワーク4: 分割計画と listOverdue のスタブを main にコミットしてから、新しいブランチで2本始める
-claude --worktree a1-domain
-claude --worktree a2-api
+# ワーク4: 実装 Issue を2つ起票してから、main から新しいブランチで2本始める
+claude --worktree a1-search     # ブランチは worktree-a1-search
+claude --worktree a2-my-loans   # 別のターミナルで
+
 # ワーク6: ワーク5で受入テストをコミットした既存ブランチを起点にする
+git switch main && git fetch origin
 git worktree add .claude/worktrees/b1 feat/b1-extend-domain
 git worktree add .claude/worktrees/b2 feat/b2-extend-api
 ```
 
 worktree ごとに `npm ci` が必要です。`npm run dev` を両方で起動するときは `PORT=3001 npm run dev` のようにポートを分けます。
+
+ワーク4の A1 と A2 は、どちらを先にマージしてもかまいません。あとからマージする側は main を取り込み（`git fetch origin && git merge origin/main`）、`openapi.yaml` で衝突したら両方の変更を残して、`npm run generate` で `src/generated/` を作り直します。マージ後に `npm run dev` で起動し、次の結果になることを確かめます。
+
+```bash
+curl -H 'Authorization: Bearer u-alice' 'http://localhost:3000/items?category=camera&available=true'   # camera-01 の1件
+curl -H 'Authorization: Bearer u-alice' 'http://localhost:3000/items?available=true'                   # monitor-02 と camera-01 の2件
+curl -H 'Authorization: Bearer u-alice' http://localhost:3000/loans/me                                 # L-0001 と L-0006 の2件
+```
+
+ワーク7では、B2 が B1 の `extendLoan` を呼ぶので、B1 → B2 の順にマージします。
 
 ## Hook の雛形
 
@@ -212,16 +248,16 @@ npx tsx scripts/detect-anomaly.ts --report # 判定結果を Issue 本文に使�
 
 ## 追いつき用ブランチ
 
-各ワークの完了状態を `stage-N-done` ブランチとして用意しています。遅れたときは、作業ブランチで次を実行して PR を出し、マージしてから次のワークに合流します。
+各ワークの完了状態を `stage-N-done` ブランチとして用意しています。遅れたときは、作業ブランチで次を実行して PR を出し、マージしてから次のワークに合流します（N はワーク番号）。
 
 ```bash
-git fetch origin
-git switch -c catch-up/stage-4 origin/main
-git checkout origin/stage-4-done -- .
-git commit -m "chore: stage-4-done に追いつく"
-git push -u origin catch-up/stage-4
-gh pr create --fill
+git fetch origin && git switch -c catch-up/stage-N origin/main
+git checkout origin/stage-N-done -- .
+git commit -m "chore: stage-N-done に追いつく"
+git push -u origin catch-up/stage-N && gh pr create --fill && gh pr merge --merge
 ```
+
+ワーク7で `ci` を必須チェックにしたあとは、CI が緑になってから `gh pr merge --merge` します。
 
 `git merge` で取り込まないのは、テンプレートから作ったリポジトリではブランチ間の履歴がつながらない可能性があるためです。PR 経由にすると、ワーク7で branch protection を入れたあとも同じ手順で合流できます。
 
@@ -229,36 +265,34 @@ gh pr create --fill
 
 | ブランチ | 含まれるもの | 単体で `npm test` |
 |---|---|---|
-| `stage-1-done` | `docs/intents/overdue-loans.md` | 緑 |
-| `stage-2-done` | `docs/specs/overdue-loans.md`、`.claude/settings.json`（marketplace 登録） | 緑 |
+| `stage-1-done` | `docs/intents/borrowing-status.md` | 緑 |
+| `stage-2-done` | `docs/specs/borrowing-status.md`、`.claude/settings.json`（marketplace 登録） | 緑 |
 | `stage-3-done` | CLAUDE.md の整備、`block-generated.sh` / `biome.sh` の Hook 登録 | 緑 |
-| `stage-4-done` | 分割計画（`docs/plans/overdue-loans.md`）→ `listOverdue` のスタブ → A1（`docs/plans/overdue-loans-a1.md`、ドメイン関数）→ A2（`docs/plans/overdue-loans-a2.md`、API と `vi.mock` を使うテスト）の順に積んだ状態 | 緑 |
+| `stage-4-done` | A1 の plan（`docs/plans/borrowing-status-a1-search.md`）→ A1 の実装（`GET /items` の絞り込み）→ A2 の plan（`docs/plans/borrowing-status-a2-my-loans.md`）→ A2 の実装（`GET /loans/me`）の順に積んだ状態 | 緑 |
 | `stage-5-done` | `.github/workflows/ci.yml`、`protect-tests.sh` の Hook 登録、B1 / B2 の受入テスト | **赤**（受入テストが実装前のため意図どおり失敗。lint と typecheck は緑） |
-| `stage-6-done` | `docs/plans/loan-extension-b1.md` / `-b2.md`、機能 B の実装 | 緑 |
+| `stage-6-done` | `docs/plans/loan-extension-b1-logic.md` / `-b2-api.md`、機能 B の実装 | 緑 |
 | `stage-7-done` | `REVIEW.md`、`.github/workflows/deploy.yml`、`require-release-approval.sh` の Hook 登録 | 緑 |
 | `stage-8-done` | `.github/workflows/maintain.yml`、Maintain の診断例 `docs/intents/error-rate-spike.md` | 緑 |
+
+実装 Issue は stage ブランチでは作られません。ワーク4の Issue は自分で起票し、ワーク5で起票する B1・B2 の Issue は `docs/workshop/issues/` の本文を使います。
 
 `stage-5-done` だけは、`git checkout origin/stage-5-done -- .` で丸ごと取り込まないでください。失敗する受入テストが main に入り、CI が赤になります。前半（CI と Hook）は main への PR に、後半（受入テスト）は feat ブランチに分けて取り込みます。
 
 ```bash
-# 前半: CI とテスト保護 Hook を main に入れる
-git switch -c catch-up/stage-5 origin/main
+# 前半: CI とテスト保護 Hook を main に入れる（PR を出し、CI が緑になったら自分でマージ）
+git fetch origin && git switch -c catch-up/stage-5 origin/main
 git checkout origin/stage-5-done -- .github/workflows/ci.yml .claude/settings.json
-git commit -m "chore: stage-5-done の CI と Hook に追いつく"
-git push -u origin catch-up/stage-5
-gh pr create --fill   # マージしてから後半へ
+git commit -m "chore: stage-5-done の CI と Hook に追いつく" && git push -u origin catch-up/stage-5
+gh pr create --fill
 
-# 後半: 受入テストを feat ブランチの起点にする（main には入れない）
-git fetch origin
-git switch -c feat/b1-extend-domain origin/main
+# 後半: 前半のマージ後、受入テストをそれぞれの feat ブランチに置く（main には入れない。PR は出さない）
+git fetch origin && git switch -c feat/b1-extend-domain origin/main
 git checkout origin/stage-5-done -- src/loans/domain/extension.test.ts
-git commit -m "test: B1 の受入テストを追加"
-git push -u origin feat/b1-extend-domain
-
+git commit -m "test: B1 の受入テストを追加" && git push -u origin feat/b1-extend-domain
 git switch -c feat/b2-extend-api origin/main
 git checkout origin/stage-5-done -- src/loans/routes.extension.test.ts
-git commit -m "test: B2 の受入テストを追加"
-git push -u origin feat/b2-extend-api
+git commit -m "test: B2 の受入テストを追加" && git push -u origin feat/b2-extend-api
+git switch main && git pull     # ワーク6で2本を worktree に出すため、main に戻る
 ```
 
 `stage-6-done` に追いつくときは、通常どおり `git checkout origin/stage-6-done -- .` で取り込めます（受入テストと実装の両方が入り、緑になります）。
