@@ -58,6 +58,20 @@ paths:
           description: 備品が存在しない
         "409":
           description: 備品が貸出中
+  /loans/me:
+    get:
+      summary: 自分の貸出の一覧（ログイン中の利用者の、返却していない貸出）
+      security:
+        - bearer: []
+      responses:
+        "200":
+          description: 自分の貸出中の備品と返却期限。返却期限の早い順
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MyLoanList"
+        "401":
+          description: 未認証
   /loans/{id}/return:
     post:
       summary: 貸出を返却する（借り手本人または管理者）
@@ -149,6 +163,33 @@ components:
       properties:
         loan:
           $ref: "#/components/schemas/Loan"
+    MyLoan:
+      description: 自分の貸出。借り手は本人なので、借り手の情報は含めない
+      type: object
+      required: [id, itemId, itemName, loanedAt, dueDate, extensionCount]
+      properties:
+        id:
+          type: string
+        itemId:
+          type: string
+        itemName:
+          type: string
+        loanedAt:
+          type: string
+          format: date
+        dueDate:
+          type: string
+          format: date
+        extensionCount:
+          type: integer
+    MyLoanList:
+      type: object
+      required: [loans]
+      properties:
+        loans:
+          type: array
+          items:
+            $ref: "#/components/schemas/MyLoan"
     CreateLoanRequest:
       type: object
       required: [itemId]

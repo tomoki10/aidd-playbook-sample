@@ -35,6 +35,20 @@ export type LoanEnvelope = {
   loan: Loan;
 };
 
+/** 自分の貸出。借り手は本人なので、借り手の情報は含めない */
+export type MyLoan = {
+  id: string;
+  itemId: string;
+  itemName: string;
+  loanedAt: string;
+  dueDate: string;
+  extensionCount: number;
+};
+
+export type MyLoanList = {
+  loans: MyLoan[];
+};
+
 export type CreateLoanRequest = {
   itemId: string;
 };

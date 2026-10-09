@@ -173,3 +173,92 @@ describe("POST /loans/:id/return", () => {
     expect(res.status).toBe(401);
   });
 });
+
+// 受入テスト: docs/specs/borrowing-status.md の R4・R5（A2: 自分の貸出の一覧）
+describe("GET /loans/me", () => {
+  it("[R4] 本人の貸出中の備品と返却期限を、返却期限の早い順に返す", async () => {
+    const { app } = createTestApp();
+
+    const res = await app.request("/loans/me", { headers: auth("u-alice") });
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({
+      loans: [
+        {
+          id: "L-0001",
+          itemId: "pc-01",
+          itemName: "ノート PC 14インチ #1",
+          loanedAt: "2026-09-10",
+          dueDate: "2026-09-24",
+          extensionCount: 0,
+        },
+        {
+          id: "L-0006",
+          itemId: "camera-02",
+          itemName: "Web 会議用カメラ #2",
+          loanedAt: "2026-09-05",
+          dueDate: "2026-09-26",
+          extensionCount: 1,
+        },
+      ],
+    });
+  });
+
+  it("[R4] 返却済みの貸出は含めない", async () => {
+    const { app } = createTestApp();
+
+    const res = await app.request("/loans/me", { headers: auth("u-carol") });
+
+    // u-carol の L-0003 は返却済み、L-0005 は貸出中
+    const body = await res.json();
+    expect(body.loans.map((loan: { id: string }) => loan.id)).toEqual(["L-0005"]);
+  });
+
+  it("[R5] ほかの社員の貸出は含めない", async () => {
+    const { app } = createTestApp();
+
+    const res = await app.request("/loans/me", { headers: auth("u-bob") });
+
+    const body = await res.json();
+    expect(body.loans.map((loan: { id: string }) => loan.id)).toEqual(["L-0004", "L-0002"]);
+  });
+
+  it("[R5] 利用者 ID をクエリで渡しても、認証した本人の貸出だけを返す", async () => {
+    const { app } = createTestApp();
+
+    const res = await app.request("/loans/me?userId=u-bob", { headers: auth("u-alice") });
+
+    const body = await res.json();
+    expect(body.loans.map((loan: { id: string }) => loan.id)).toEqual(["L-0001", "L-0006"]);
+  });
+
+  it("[R4] 貸出中のものがなければ空の一覧を返す", async () => {
+    const { app } = createTestApp();
+
+    const res = await app.request("/loans/me", { headers: auth("u-admin") });
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ loans: [] });
+  });
+
+  it("[R5] 認証がなければ 401", async () => {
+    const { app } = createTestApp();
+
+    const res = await app.request("/loans/me");
+
+    expect(res.status).toBe(401);
+    expect((await res.json()).error.code).toBe("UNAUTHORIZED");
+  });
+
+  it("借り手の連絡先を含めず、参照を監査ログに残す", async () => {
+    const { app, deps } = createTestApp();
+
+    const text = await (await app.request("/loans/me", { headers: auth("u-alice") })).text();
+
+    expect(text).not.toContain("@example.com");
+    expect(text).not.toContain("090-");
+    expect(deps.audit.entries()).toContainEqual(
+      expect.objectContaining({ actorId: "u-alice", action: "loan.list.mine", result: "success" }),
+    );
+  });
+});

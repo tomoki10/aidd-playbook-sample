@@ -3,6 +3,7 @@ import { z } from "zod";
 import type { Deps } from "../app.ts";
 import { type AuthEnv, requireAuth } from "../auth/middleware.ts";
 import { findEmployee } from "../directory/employees.ts";
+import type { MyLoanList } from "../generated/types.ts";
 import { errorBody } from "../http/errors.ts";
 import { toISODate } from "../lib/date.ts";
 import { lendItem } from "./domain/lend.ts";
@@ -57,6 +58,33 @@ export function loanRoutes(deps: Deps): Hono<AuthEnv> {
       result: "success",
     });
     return c.json({ loan: toLoanResponse(result.loan) }, 201);
+  });
+
+  // GET /loans/me: ログイン中の利用者の、返却していない貸出と返却期限。docs/specs/borrowing-status.md（R4・R5）
+  // 本人は認証から特定し、利用者 ID をクライアントから受け取らない
+  app.get("/me", (c) => {
+    const user = c.get("user");
+    const body: MyLoanList = {
+      loans: deps.loans
+        .list()
+        .filter((loan) => loan.borrower.id === user.id && loan.returnedAt === null)
+        .sort((a, b) => a.dueDate.localeCompare(b.dueDate) || a.id.localeCompare(b.id))
+        .map((loan) => ({
+          id: loan.id,
+          itemId: loan.itemId,
+          itemName: deps.items.get(loan.itemId)?.name ?? "",
+          loanedAt: loan.loanedAt,
+          dueDate: loan.dueDate,
+          extensionCount: loan.extensionCount,
+        })),
+    };
+    deps.audit.record({
+      actorId: user.id,
+      action: "loan.list.mine",
+      targetId: null,
+      result: "success",
+    });
+    return c.json(body);
   });
 
   // POST /loans/:id/return: 借り手本人または管理者が返却する
