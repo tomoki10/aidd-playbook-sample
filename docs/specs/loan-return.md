@@ -1,6 +1,7 @@
 # spec: 備品の返却（記入例）
 
-- 元の intent: [docs/intents/loan-return.md](../intents/loan-return.md)（総務部）。状態: 受け入れ済み
+- 元の intent: [docs/intents/loan-return.md](../intents/loan-return.md)（総務部）
+- 状態: 受け入れ済み
 - 適用した Skill: secure-api
 
 ## 要件
@@ -26,7 +27,7 @@
 | 他人の貸出を返却できてはいけない | R3。本人か管理者かの判定をドメイン関数で行う |
 | 期限を過ぎていても返却は受け付ける | R5 |
 
-## intent から持ち越した未解決の問い
+## intent で解決しない問い
 
 - 返却時に備品の状態（破損など）を記録するか → 今回は扱わない。必要になったら別の intent にする
 

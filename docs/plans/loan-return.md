@@ -1,45 +1,17 @@
-# plan: 備品の返却（記入例）
+# Plan: 備品の返却（記入例）
 
-- spec: [docs/specs/loan-return.md](../specs/loan-return.md)
-- Issue: #（実装 Issue の番号）
-- 状態: 承認済み（このコミットの後に実装を始める）
+## Approach
 
-## 変更するファイル
+1. 借り手本人が自分の貸出を返却でき、返却した備品はすぐに借りられる状態にする
+2. 管理者は他人の貸出を代理で返却でき、それ以外の利用者には貸出が存在しない場合と同じ応答を返す
+3. 返却済みの貸出は返却できないようにし、期限を過ぎた貸出は返却を受け付ける
+4. 返却の成否（拒否した試行を含む）を、借り手の連絡先を含めずに監査ログに残す
 
-- `src/loans/domain/return.ts`、`src/loans/domain/return.test.ts`（新規）
-- `src/loans/routes.ts`、`src/loans/routes.test.ts`
-- `openapi.yaml`（パスの追加のみ。スキーマは既存の `LoanEnvelope` を使う）
+## Risks
 
-### 触らないファイル
+- 本人以外に「権限がない」と返すと、他人の貸出 ID が有効かどうかが分かってしまう
 
-- `src/generated/`（スキーマを変えないので再生成しない）
+## Verification
 
-### 応答とエラー
-
-`POST /loans/:id/return` の応答は次のとおり。認証は既存の `requireAuth`、本文は共通のエラー形式 `errorBody(code, message)` を使う。
-
-| 状況 | ステータス | 本文 | 監査ログ |
-|---|---|---|---|
-| 返却できた | 200 | `{ "loan": ... }`（`toLoanResponse` で借り手を `{ id, name }` に絞る） | `success` |
-| 認証なし・不明なトークン | 401 | `UNAUTHORIZED` | なし |
-| 貸出がない | 404 | `NOT_FOUND` | なし |
-| 本人・管理者以外 | 404 | `NOT_FOUND` | `denied` |
-| 返却済み | 409 | `LOAN_ALREADY_RETURNED` | `failure` |
-
-## 作業順
-
-方針: ドメイン関数 `returnLoan` に認可と状態の判定を寄せ、ルートは「貸出を探す → ドメイン関数を呼ぶ → 結果を HTTP に変換する → 監査ログを書く」だけにする。
-
-1. `src/loans/domain/return.test.ts` に spec の要件 R1〜R5 をドメインのテストとして書く（失敗を確認）
-2. `src/loans/domain/return.ts` に `returnLoan` を実装する
-3. `src/loans/routes.test.ts` に API のテストを書く（R3 の 404 と監査ログ、R6 の個人情報）
-4. `src/loans/routes.ts` に `POST /:id/return` を追加する。`not_borrower` は 404 に変換する
-
-## リスク
-
-- 本人以外に 403 を返すと、貸出 ID の存在が分かる。spec の R3 のとおり 404 にする
-
-## 成功を示すテスト
-
-- `src/loans/domain/return.test.ts` と `src/loans/routes.test.ts` が、spec の要件 R1〜R6 をそれぞれ確かめている
-- `npm run lint && npm run typecheck && npm test` が通る
+- 本人、管理者、それ以外の利用者、返却済み、期限超過の返却をそれぞれテストする（R1〜R5）
+- 応答と監査ログに借り手の連絡先が含まれないことを確認する（R6）
