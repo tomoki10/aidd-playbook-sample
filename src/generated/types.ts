@@ -1,10 +1,13 @@
 // このファイルは openapi.yaml から `npm run generate` で生成しています。
 // 直接編集しないでください。型を変えるときは openapi.yaml を直して再生成します。
 
+/** 備品の種類 */
+export type ItemCategory = "pc" | "monitor" | "camera" | "projector" | "other";
+
 export type Item = {
   id: string;
   name: string;
-  category: "pc" | "monitor" | "camera" | "projector" | "other";
+  category: ItemCategory;
   available: boolean;
 };
 

@@ -9,14 +9,29 @@ info:
 paths:
   /items:
     get:
-      summary: 備品の一覧（認証不要）
+      summary: 備品の一覧（認証不要）。種類と、いま借りられるかで絞り込める
+      parameters:
+        - name: category
+          in: query
+          required: false
+          description: 備品の種類で絞り込む
+          schema:
+            $ref: "#/components/schemas/ItemCategory"
+        - name: available
+          in: query
+          required: false
+          description: true ならいま借りられる備品だけ、false なら貸出中の備品だけを返す。返却されていない貸出があれば、返却期限を過ぎていても貸出中
+          schema:
+            type: boolean
       responses:
         "200":
-          description: 備品の一覧
+          description: 備品の一覧。借り手の情報は含めない
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ItemList"
+        "400":
+          description: クエリの値が不正（未知の category、true / false 以外の available）
   /loans:
     post:
       summary: 備品を借りる（借り手はログイン中の利用者）
@@ -73,6 +88,10 @@ components:
       type: http
       scheme: bearer
   schemas:
+    ItemCategory:
+      description: 備品の種類
+      type: string
+      enum: [pc, monitor, camera, projector, other]
     Item:
       type: object
       required: [id, name, category, available]
@@ -82,8 +101,7 @@ components:
         name:
           type: string
         category:
-          type: string
-          enum: [pc, monitor, camera, projector, other]
+          $ref: "#/components/schemas/ItemCategory"
         available:
           type: boolean
     ItemList:
