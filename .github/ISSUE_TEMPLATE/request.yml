@@ -1,4 +1,4 @@
-name: request
+name: 要望起票
 description: 機能の要望や困りごとを起票する（Plan 工程の入口）
 title: '[要望] '
 labels: ['intent']
