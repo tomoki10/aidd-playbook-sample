@@ -1,7 +1,7 @@
-name: 要望
+name: request
 description: 機能の要望や困りごとを起票する（Plan 工程の入口）
-title: "[要望] "
-labels: ["intent"]
+title: '[要望] '
+labels: ['intent']
 body:
   - type: markdown
     attributes:
