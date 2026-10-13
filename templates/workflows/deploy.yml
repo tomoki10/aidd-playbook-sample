@@ -1,4 +1,4 @@
-# ワーク7で .github/workflows/deploy.yml にコピーして使う。
+# ワーク7の講師のデモで、デモ用のリポジトリの .github/workflows/deploy.yml にコピーして使う（受講者の private リポジトリには入れない）。
 # main への push（PR のマージ）で staging に模擬デプロイし、
 # production は Environments の承認（required reviewers）を待ってから実行する。
 # 事前に Settings → Environments で staging と production を作り、
