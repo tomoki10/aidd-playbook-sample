@@ -8,9 +8,9 @@ B2（`POST /loans/:id/extend`）
 
 ## 範囲
 
-- 触る: `src/loans/routes.ts`、`src/loans/routes.extension.test.ts`（受入テスト）、`openapi.yaml`（パスの追加のみ）
+- 触る: `src/loans/routes.ts`、`src/loans/routes.extension.test.ts`（実装と同じ PR で新しく作るテスト）、`openapi.yaml`（パスの追加のみ）
 - 触らない: `src/loans/domain/extension.ts`、`src/loans/domain/extension.test.ts`（B1 の範囲）、`src/generated/`（応答は既存の `LoanEnvelope` を使うので、スキーマを変えず再生成もしない）
-- ブランチ: `feat/b2-extend-api`
+- ブランチ: `worktree-b2-api`（`claude --worktree b2-api` で main から作る）
 
 ルートは返却 API と同じ形（貸出を探す → ドメイン関数を呼ぶ → 結果を HTTP に変換する → 監査ログを書く）にし、延長の規則は持ちません。
 
@@ -46,20 +46,29 @@ export function extendLoan(loan: Loan, userId: string, today: ISODate): ExtendRe
 
 ## 受入テスト
 
-`src/loans/routes.extension.test.ts` に、次の観点を書きます。`extendLoan` は差し替え、「ドメイン関数の結果を HTTP にどう変換するか」だけを確かめます。延長の規則そのものは B1 のテストで確かめます。括弧内は対応する spec の要件です。
+テストの設計です。spec の要件（R 番号）ごとに、確かめる観点と期待値を書きます。受講者は PO・エンジニア役でこの表を読み、足りない観点や食い違う期待値があれば Issue に足して合意してから、`ready-for-agent` を付けます。
 
-1. `extendLoan` を、保存されている貸出、ログイン中の利用者の ID、サーバーの今日の日付（テストでは `2026-10-01`）で呼ぶ（R1）
-2. `ok: true` なら 200 で、返された貸出を保存して応答の `loan` にし、監査ログに `success` を残す（R1）
-3. `not_borrower` なら 404（`NOT_FOUND`）で、貸出は変わらず、監査ログに `denied` を残す（R4）
-4. `already_returned` / `overdue` / `limit_reached` なら 409 で、`code` はそれぞれ `LOAN_ALREADY_RETURNED` / `LOAN_OVERDUE` / `EXTENSION_LIMIT_REACHED`。監査ログに `failure` を残す（R1、R2、R3）
-5. 存在しない貸出は 404、認証なしは 401。どちらも `extendLoan` を呼ばない（R4）
-6. 応答の借り手は `{ id, name }` だけで、`email` と `phone` を含まない（spec の設計、secure-api）
+テストコードはこの Issue には書きません。エージェントが実装と同じ PR（同じブランチ）で `src/loans/routes.extension.test.ts` に書き、テスト名に R 番号を付けます。テストでは `extendLoan` を差し替え、「ドメイン関数の結果を HTTP にどう変換するか」だけを確かめます。延長の規則そのものは B1 のテストで確かめます。
+
+前提: `createTestApp()` の初期データの L-0002（借り手が `u-bob`、備品が `monitor-01`）。サーバーの今日は 2026-10-01。
+
+| 要件 | 観点 | 期待値 |
+|---|---|---|
+| R1 | `u-bob` が L-0002 を延長する | `extendLoan` が、保存されている L-0002、`u-bob`、`2026-10-01` で呼ばれる |
+| R1 | `extendLoan` が `ok: true`（返却期限 2026-10-11、延長回数1）を返す | 200。応答の `loan` が延長後の貸出になり、保存されている L-0002 も同じ値に変わる。監査ログに `loan.extend` の `success` が残る |
+| R1 | `extendLoan` が `already_returned` を返す | 409、`code` は `LOAN_ALREADY_RETURNED`。監査ログに `failure` が残る |
+| R2 | `extendLoan` が `limit_reached` を返す | 409、`code` は `EXTENSION_LIMIT_REACHED`。監査ログに `failure` が残る |
+| R3 | `extendLoan` が `overdue` を返す | 409、`code` は `LOAN_OVERDUE`。監査ログに `failure` が残る |
+| R4 | `u-alice` が延長し、`extendLoan` が `not_borrower` を返す | 404、`code` は `NOT_FOUND`。L-0002 は変わらない。監査ログに `denied` が残る |
+| R4 | 存在しない貸出（L-9999）を延長する／認証なしで延長する | それぞれ 404 と 401。どちらも `extendLoan` を呼ばない |
+| 設計（secure-api） | 延長できたときの応答 | 借り手は `{ id, name }` だけで、`email` と `phone` を含まない |
 
 ## 完了の確かめ方
 
 - [ ] `npm run lint`
 - [ ] `npm run typecheck`
 - [ ] `npm test`（`src/loans/routes.extension.test.ts` がすべて通る）
+- [ ] 上の受入テストの観点と期待値が、すべてテストになっている。テスト名に R 番号が付いている
 - [ ] B1 のマージ後に main を取り込み、`npm test` がすべて通る
 - [ ] `npm run dev` で起動し、`u-bob` で L-0002 を延長すると返却期限が7日延び、もう一度延長すると 409（`EXTENSION_LIMIT_REACHED`）になる
 

@@ -8,9 +8,9 @@ B1（貸出延長のドメイン関数 `extendLoan`）
 
 ## 範囲
 
-- 触る: `src/loans/domain/extension.ts`（main にあるスタブの本体）、`src/loans/domain/extension.test.ts`（受入テスト）
+- 触る: `src/loans/domain/extension.ts`（main にあるスタブの本体）、`src/loans/domain/extension.test.ts`（実装と同じ PR で新しく作るテスト）
 - 触らない: `src/loans/routes.ts`、`src/loans/routes.extension.test.ts`、`openapi.yaml`、`src/generated/`（B2 の範囲）
-- ブランチ: `feat/b1-extend-domain`
+- ブランチ: `worktree-b1-logic`（`claude --worktree b1-logic` で main から作る）
 
 延長の規則（本人か、返却済みか、期限超過か、上限か）は、この B1 のドメイン関数だけで判定します。B2 のルートには判定を書きません。
 
@@ -37,22 +37,30 @@ export function extendLoan(loan: Loan, userId: string, today: ISODate): ExtendRe
 
 ## 受入テスト
 
-`src/loans/domain/extension.test.ts` に、次の観点を書きます。括弧内は対応する spec の要件で、テスト名にも付けます。
+テストの設計です。spec の要件（R 番号）ごとに、確かめる観点と期待値を書きます。受講者は PO・エンジニア役でこの表を読み、足りない観点や食い違う期待値があれば Issue に足して合意してから、`ready-for-agent` を付けます。
 
-1. 期限内で延長回数0の貸出を本人が延長すると、`dueDate` が7日後になり、`extensionCount` が1になる（R1）
-2. 返却期限の当日（`today === dueDate`）は延長できる（R3）
-3. 期限の翌日は `overdue` で延長できない（R3）
-4. `extensionCount` が1の貸出は `limit_reached`（R2）
-5. 本人以外（管理者を含む）は `not_borrower`（R4）
-6. 返却済みは `already_returned`（R1）
-7. 複数に当てはまるときは、判定順で先の理由を返す（R1〜R4）
-8. 引数の `loan` を書き換えない（R1）
+テストコードはこの Issue には書きません。エージェントが実装と同じ PR（同じブランチ）で `src/loans/domain/extension.test.ts` に書き、テスト名に R 番号を付けます（例: `[R1] 期限内で延長0回の貸出を本人が延長すると、返却期限が7日後になり、延長回数が1になる`）。
+
+前提: 借り手が `u-bob`、返却期限が 2026-10-04、延長回数が0の返却前の貸出。今日は 2026-10-01。
+
+| 要件 | 観点 | 期待値 |
+|---|---|---|
+| R1・R2 | 延長の日数と上限 | `EXTENSION_DAYS` が7、`MAX_EXTENSIONS` が1 |
+| R1 | 期限内・延長0回の貸出を本人が延長する | `ok: true`。返却期限が現在の返却期限の7日後（2026-10-11）、延長回数が1 |
+| R1 | 返却済みの貸出を本人が延長する | `ok: false`、理由は `already_returned` |
+| R1 | 延長したあとの引数の `loan` | 書き換わっていない（延長後の貸出は新しいオブジェクトで返す） |
+| R2 | 延長回数が1の貸出を本人が延長する | `ok: false`、理由は `limit_reached` |
+| R3 | 返却期限の当日に延長する（返却期限 2026-10-01） | `ok: true`。返却期限が 2026-10-08 |
+| R3 | 返却期限の翌日に延長する（返却期限 2026-09-30） | `ok: false`、理由は `overdue` |
+| R4 | 本人以外の利用者（`u-alice`）と管理者（`u-admin`）が延長する | どちらも `ok: false`、理由は `not_borrower` |
+| R1〜R4 | 延長できない理由が複数あてはまる | 「本人でない → 返却済み → 期限超過 → 上限」の順で、先の理由を1つだけ返す |
 
 ## 完了の確かめ方
 
 - [ ] `npm run lint`
 - [ ] `npm run typecheck`
 - [ ] `npm test`（`src/loans/domain/extension.test.ts` がすべて通る）
+- [ ] 上の受入テストの観点と期待値が、すべてテストになっている。テスト名に R 番号が付いている
 
 ## マージの順番
 
