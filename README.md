@@ -3,7 +3,7 @@
 研修「Claude Code チーム開発実践〜AI-native な開発サイクルを体験する〜」の題材リポジトリです。社内備品の貸出を管理する小さな Web API（TypeScript / Hono）に、Anthropic の AI-native SDLC Playbook の6工程（Plan → Design → Build → Test → Deploy → Maintain）に沿って機能を追加します。
 
 - 1周目（Day1）: 機能 A「備品の空き状況と自分の貸出の確認」（機能名 `borrowing-status`）を Plan → Design → Build で作る。A1 は備品の絞り込み（`GET /items?category=&available=`）、A2 は自分の貸出の一覧（`GET /loans/me`）で、互いの関数を呼ばない2つの作業を並行に実装する
-- 2周目（Day2）: 機能 B「貸出の延長 API」（`POST /loans/:id/extend`）を作る。CI とテスト保護 Hook を入れ、実装 Issue で受入テストの観点と期待値に合意してから Build し、Deploy まで通す。B2（API）は B1（ドメイン関数）を呼ぶので、境目の関数を決めてから並行に実装する。最後に Maintain で次の周の `intent.md` をつくる
+- 2周目（Day2）: 機能 B「貸出の延長 API」（`POST /loans/:id/extend`）を作る。CI を入れ、実装 Issue で受入テストの観点と期待値に合意してから Build し、Deploy まで通す。B2（API）は B1（ドメイン関数）を呼ぶので、境目の関数を決めてから並行に実装する。最後に Maintain で次の周の `intent.md` をつくる
 
 GitHub 上では Claude を実行しません。AI レビューや診断は、すべてローカルの Claude Code で行います。
 
@@ -128,7 +128,7 @@ curl -X POST -H 'Authorization: Bearer u-alice' -H 'Content-Type: application/js
 | 2 | Design | marketplace を登録して `secure-api` Skill を有効にし、spec を書く | `.claude/settings.json`、`docs/specs/borrowing-status.md` |
 | 3 | Build（土台） | CLAUDE.md を整え、Biome と生成物保護の Hook を入れる | `CLAUDE.md`、`.claude/settings.json` |
 | 4 | Build（並行実装） | spec から実装 Issue を2つ（`implementation.md`）起票し、worktree 2本で plan → 実装。A1 と A2 は互いの関数を呼ばないので、スタブもマージの順番も要らない | `docs/plans/borrowing-status-a1-search.md` / `-a2-my-loans.md`、`src/items/routes.ts`、`src/loans/routes.ts`、`openapi.yaml` |
-| 5 | Test | CI とテスト保護 Hook を入れ、機能 B の実装 Issue を起票して受入テストの観点と期待値に合意する | `.github/workflows/ci.yml`、`.claude/settings.json`、Issue（`docs/workshop/issues/loan-extension-b1.md` / `-b2.md` の本文） |
+| 5 | Test | CI を入れ、機能 B の実装 Issue を起票して受入テストの観点と期待値に合意する | `.github/workflows/ci.yml`、Issue（`docs/workshop/issues/loan-extension-b1.md` / `-b2.md` の本文） |
 | 6 | Build（2周目） | main から worktree 2本、plan → 実装とテストを同じ PR で | `docs/plans/loan-extension-b1-logic.md` / `-b2-api.md`、`src/loans/domain/extension.ts` / `extension.test.ts`、`src/loans/routes.ts` / `routes.extension.test.ts`、`openapi.yaml` |
 | 7 | Deploy | REVIEW.md、ローカルでの AI レビュー、リリース承認 Hook。deploy ワークフロー、Environments、branch protection は講師のデモで見る | `REVIEW.md`、`.claude/settings.json` |
 | 8 | Maintain | maintain ワークフローを main にマージし、3σ を超える値を追加したブランチで手動起動して、起票された Issue をローカルで診断して intent を書く | `.github/workflows/maintain.yml`、`docs/intents/error-rate-spike.md` |
@@ -169,7 +169,8 @@ gh issue edit <番号> --add-label ready-for-agent
 - 新しい機能では、テストコードを実装の前に用意しません。テストの設計（spec の要件 R 番号ごとの観点と期待値）は、人が実装 Issue の「受入テスト」に書いて合意します
 - テストコードは、エージェントが実装と同じ PR（同じブランチ）で書き、テスト名に R 番号を付けます（例: `[R3] 返却期限の当日は延長できる`）。レビューでは、テストが Issue の観点と期待値を満たしているかを見ます
 - 実装の前に失敗するテストを用意するのは、バグを直すときの再現テストだけです
-- テスト保護 Hook（`protect-tests.sh`）は、既存のテスト（回帰）とバグ修正の再現テストを守ります。エージェントが書いてコミットしたテストを、実装に合わせて書き換えるのも止めます。新しいテストファイルは作れます
+- テストは CI（ワーク5で入れる `.github/workflows/ci.yml`）で PR ごとに毎回実行します
+- テストを変えるときは、先に Issue の受入テスト（または spec）を直します。実装に合わせてテストの期待値を変えません
 
 ### plan
 
@@ -213,7 +214,6 @@ curl -H 'Authorization: Bearer u-alice' http://localhost:3000/loans/me          
 |---|---|---|---|---|
 | `block-generated.sh` | PreToolUse | `Edit\|Write\|MultiEdit` | `src/generated/` への編集をブロック | 3 |
 | `biome.sh` | PostToolUse | `Edit\|Write\|MultiEdit` | 編集した `*.ts` / `*.json` に Biome をかける | 3 |
-| `protect-tests.sh` | PreToolUse | `Edit\|Write\|MultiEdit` | HEAD にコミット済みの `*.test.ts` への編集をブロック（新規テストは許可）。既存のテスト（回帰）とバグ修正の再現テストを守る。エージェントが書いてコミットしたテストを、実装に合わせて書き換えるのも止める | 5 |
 | `require-release-approval.sh` | PreToolUse | `Bash` | `deploy.ts ... production` を `RELEASE_APPROVAL` なしでブロック | 7 |
 
 登録の例（ワーク7まで終えた状態）です。PreToolUse には要素を**追記**し、既存の要素を上書きしないでください。
@@ -225,8 +225,7 @@ curl -H 'Authorization: Bearer u-alice' http://localhost:3000/loans/me          
       {
         "matcher": "Edit|Write|MultiEdit",
         "hooks": [
-          { "type": "command", "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/block-generated.sh" },
-          { "type": "command", "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/protect-tests.sh" }
+          { "type": "command", "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/block-generated.sh" }
         ]
       },
       {
@@ -294,7 +293,7 @@ git checkout origin/stage-7-done -- . ':!.github/workflows/deploy.yml'   # stage
 | `stage-2-done` | `docs/specs/borrowing-status.md`、`.claude/settings.json`（marketplace 登録） | 緑 |
 | `stage-3-done` | CLAUDE.md の整備、`block-generated.sh` / `biome.sh` の Hook 登録 | 緑 |
 | `stage-4-done` | A1 の plan（`docs/plans/borrowing-status-a1-search.md`）→ A1 の実装（`GET /items` の絞り込み）→ A2 の plan（`docs/plans/borrowing-status-a2-my-loans.md`）→ A2 の実装（`GET /loans/me`）の順に積んだ状態 | 緑 |
-| `stage-5-done` | `.github/workflows/ci.yml`、`protect-tests.sh` の Hook 登録 | 緑 |
+| `stage-5-done` | `.github/workflows/ci.yml` | 緑 |
 | `stage-6-done` | B1 の plan（`docs/plans/loan-extension-b1-logic.md`）→ B1 の実装とテスト（`extendLoan`）→ B2 の plan（`docs/plans/loan-extension-b2-api.md`）→ B2 の実装とテスト（`POST /loans/:id/extend`）の順に積んだ状態 | 緑 |
 | `stage-7-done` | `REVIEW.md`、`require-release-approval.sh` の Hook 登録（deploy ワークフローは含めない） | 緑 |
 | `stage-8-done` | `.github/workflows/maintain.yml`、Maintain の診断例 `docs/intents/error-rate-spike.md` | 緑 |
