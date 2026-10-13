@@ -96,6 +96,30 @@ paths:
           description: 貸出が存在しない、または本人の貸出ではない
         "409":
           description: 返却済み
+  /loans/{id}/extend:
+    post:
+      summary: 貸出を延長する（借り手本人のみ。1回まで、7日）
+      security:
+        - bearer: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: 延長した
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LoanEnvelope"
+        "401":
+          description: 未認証
+        "404":
+          description: 貸出が存在しない、または本人の貸出ではない
+        "409":
+          description: 返却済み、期限超過、または延長の上限に達した
 components:
   securitySchemes:
     bearer:

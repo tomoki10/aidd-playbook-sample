@@ -6,6 +6,7 @@ import { findEmployee } from "../directory/employees.ts";
 import type { MyLoanList } from "../generated/types.ts";
 import { errorBody } from "../http/errors.ts";
 import { toISODate } from "../lib/date.ts";
+import { type ExtendResult, extendLoan } from "./domain/extension.ts";
 import { lendItem } from "./domain/lend.ts";
 import { returnLoan } from "./domain/return.ts";
 import { toLoanResponse } from "./presenter.ts";
@@ -13,6 +14,15 @@ import { toLoanResponse } from "./presenter.ts";
 const createLoanSchema = z.object({
   itemId: z.string().min(1).max(64),
 });
+
+type ExtendFailure = Exclude<ExtendResult, { ok: true }>["reason"];
+
+/** 延長できなかった理由（not_borrower 以外）と、409 で返すエラーコード */
+const EXTEND_CONFLICTS: Record<Exclude<ExtendFailure, "not_borrower">, [string, string]> = {
+  already_returned: ["LOAN_ALREADY_RETURNED", "この貸出は返却済みです"],
+  overdue: ["LOAN_OVERDUE", "返却期限を過ぎた貸出は延長できません"],
+  limit_reached: ["EXTENSION_LIMIT_REACHED", "延長は1回までです"],
+};
 
 export function loanRoutes(deps: Deps): Hono<AuthEnv> {
   const app = new Hono<AuthEnv>();
@@ -114,6 +124,40 @@ export function loanRoutes(deps: Deps): Hono<AuthEnv> {
     deps.audit.record({
       actorId: user.id,
       action: "loan.return",
+      targetId: loan.id,
+      result: "success",
+    });
+    return c.json({ loan: toLoanResponse(result.loan) });
+  });
+
+  // POST /loans/:id/extend: 借り手本人が貸出を延長する。docs/specs/loan-extension.md
+  app.post("/:id/extend", (c) => {
+    const user = c.get("user");
+    const loan = deps.loans.get(c.req.param("id"));
+    if (!loan) {
+      return c.json(errorBody("NOT_FOUND", "貸出が見つかりません"), 404);
+    }
+
+    const result = extendLoan(loan, user.id, today());
+    if (!result.ok) {
+      deps.audit.record({
+        actorId: user.id,
+        action: "loan.extend",
+        targetId: loan.id,
+        result: result.reason === "not_borrower" ? "denied" : "failure",
+      });
+      // 他人の貸出かどうかを推測させないため、本人以外には存在しない場合と同じ 404 を返す
+      if (result.reason === "not_borrower") {
+        return c.json(errorBody("NOT_FOUND", "貸出が見つかりません"), 404);
+      }
+      const [code, message] = EXTEND_CONFLICTS[result.reason];
+      return c.json(errorBody(code, message), 409);
+    }
+
+    deps.loans.save(result.loan);
+    deps.audit.record({
+      actorId: user.id,
+      action: "loan.extend",
       targetId: loan.id,
       result: "success",
     });
