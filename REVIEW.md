@@ -1,6 +1,6 @@
 # REVIEW.md
 
-PR のレビュー方針です。人のレビューと、ローカルの Claude Code による AI レビューの両方がこの方針に従います。AI レビューは機能面とセキュリティ面を別々のセッションで実行し、結果を `gh pr comment` で PR に残します。
+PR のレビュー方針です。人のレビューと、ローカルの Claude Code による AI レビューの両方がこの方針に従います。AI レビューは機能面とセキュリティ面を別々のサブエージェント（またはセッション）で実行し、結果を `gh pr comment` で PR に残します。
 
 ## レビューのパス
 
@@ -14,10 +14,10 @@ PR のレビュー方針です。人のレビューと、ローカルの Claude 
 
 ## 指摘の重み
 
-- **Important**: マージ前に直す。バグ、spec の要件やセキュリティの観点を満たさない、テストがない、テストが Issue の受入テストの観点と期待値を満たさない
-- **Nit**: 直さなくてもマージしてよい。命名、コメント、好みの書き方
+- **MUST**: マージ前に直す。バグ、spec の要件やセキュリティの観点を満たさない、テストがない、テストが Issue の受入テストの観点と期待値を満たさない
+- **NIT**: 直さなくてもマージしてよい。命名、コメント、好みの書き方
 
-指摘には必ず Important か Nit を付けます。Nit だけなら、レビュアーは approve してかまいません。
+指摘には必ず MUST か NIT を付けます。NIT だけなら、レビュアーは approve してかまいません。
 
 ## 除外するパス
 
@@ -29,18 +29,25 @@ PR のレビュー方針です。人のレビューと、ローカルの Claude 
 
 ## AI レビューの実行例
 
-main を pull したチェックアウトで実行します（先に `git fetch origin`）。PR の差分は `gh pr diff`、まだ main にない plan は `git show origin/<ブランチ>:docs/plans/...`、Issue は `gh issue view` で読ませます。
+対話中の Claude Code から頼む場合は、サブエージェントに分けさせます。
+
+```text
+サブエージェントを2つ使い、PR #12 を機能面とセキュリティ面で別々にレビューして。
+それぞれの結果を、見出しを付けて gh pr comment で PR に残して。コードは変更しないこと。
+```
+
+発展として、main を pull したチェックアウトで別々に実行する方法もあります（先に `git fetch origin`）。PR の差分は `gh pr diff`、まだ main にない plan は `git show origin/<ブランチ>:docs/plans/...`、Issue は `gh issue view` で読ませます。
 
 ```bash
 # 機能面（バグ、spec / plan との整合）
 claude -p "REVIEW.md の『バグ』と『spec / plan との整合』のパスで PR #12 をレビューして。差分は gh pr diff 12、
 plan は git show origin/worktree-b1-logic:docs/plans/loan-extension-b1-logic.md、Issue は PR 本文の Closes の番号を
 gh issue view で読むこと。docs/specs/loan-extension.md の要件、Issue の範囲・境目の関数・応答・受入テストの観点と期待値、plan の Approach に照らすこと。
-指摘は Important と Nit に分け、根拠の行を付けて Markdown で出力して。コードは変更しないこと" \
+指摘は MUST と NIT に分け、根拠の行を付けて Markdown で出力して。コードは変更しないこと" \
   --allowedTools "Read,Grep,Glob,Bash(gh pr diff:*),Bash(gh pr view:*),Bash(gh issue view:*),Bash(git show:*)" > /tmp/review-func-12.md
 
 # セキュリティ面（別のセッションで実行する）
-claude -p "REVIEW.md の『セキュリティ』のパスで、secure-api の観点から PR #12 をレビューして。指摘は Important と Nit に分けること。コードは変更しないこと" \
+claude -p "REVIEW.md の『セキュリティ』のパスで、secure-api の観点から PR #12 をレビューして。指摘は MUST と NIT に分けること。コードは変更しないこと" \
   --allowedTools "Read,Grep,Glob,Skill,Bash(gh pr diff:*),Bash(gh pr view:*),Bash(gh issue view:*),Bash(git show:*)" > /tmp/review-sec-12.md
 
 gh pr comment 12 --body-file /tmp/review-func-12.md
