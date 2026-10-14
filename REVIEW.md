@@ -57,5 +57,5 @@ gh pr comment 12 --body-file /tmp/review-sec-12.md
 ## 承認
 
 - エージェントは自分の書いたコードを承認できません。マージは PR を通し、`ci` が緑になってから行います
-- 研修の private リポジトリでは branch protection が使えないため、`ci` が緑かどうかは `gh pr checks` で自分で確かめます。実際のチームでは branch protection で PR と `ci` を必須にし、approve を1以上必須にします（講師のデモで見ます）
+- 研修の private リポジトリでは branch protection が使えないため、`ci` が緑かどうかは `gh pr checks` で自分で確かめます。実際のチームでは branch protection で PR と `ci` を必須にし、approve を1以上必須にします（講師の画面で確認します）
 - マージは merge commit で行います（squash しない）。`plan.md` が実装より前にコミットされ、テストが実装と同じ PR に入った記録を残すためです
