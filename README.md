@@ -33,7 +33,7 @@ gh auth refresh -s workflow   # .github/workflows/ のファイルを push す�
 
 ワーク5とワーク8では `.github/workflows/` にファイルを足して push します。`gh` のトークンに `workflow` の権限がないと push が拒否されるので、最初に `gh auth refresh -s workflow` で足しておきます。
 
-private リポジトリ（GitHub Free）では、branch protection と Environments が使えません。ワーク7の deploy ワークフロー、Environments の承認、branch protection は講師のデモで見ます。deploy ワークフロー（`templates/workflows/deploy.yml`）は自分のリポジトリに入れません。
+private リポジトリ（GitHub Free）では、branch protection と Environments が使えません。branch protection は、ワーク7で講師の画面で設定を確認します。deploy ワークフロー（`templates/workflows/deploy.yml`）と Environments は参考の雛形で、自分のリポジトリには入れません。
 
 ### ラベルを作る
 
@@ -106,8 +106,8 @@ curl -X POST -H 'Authorization: Bearer u-alice' -H 'Content-Type: application/js
 │   └── detect-anomaly.ts      # Maintain の異常検知
 ├── metrics/error-rate.json    # 日次の擬似メトリクス（60日分、平常）
 ├── maintain/tiers.yml         # σ の段階と応答
-├── templates/workflows/       # ワークで .github/workflows/ にコピーする雛形
-├── .claude/hooks/             # Hook の雛形スクリプト（ワークで settings.json に登録する）
+├── templates/workflows/       # ワークで .github/workflows/ にコピーする雛形（deploy.yml は参考で、コピーしない）
+├── .claude/hooks/             # Hook の雛形スクリプト（ワーク3で settings.json に登録する。リリース承認は参考）
 ├── .github/ISSUE_TEMPLATE/    # 要望（request.yml）と実装タスク（implementation.md）
 └── docs/
     ├── intents/               # intent.md（返却機能の記入例、機能 B）
@@ -130,7 +130,7 @@ curl -X POST -H 'Authorization: Bearer u-alice' -H 'Content-Type: application/js
 | 4 | Build（並行実装） | spec から実装 Issue を2つ（`implementation.md`）起票し、worktree 2本で plan → 実装。A1 と A2 は互いの関数を呼ばないので、スタブもマージの順番も要らない | `docs/plans/borrowing-status-a1-search.md` / `-a2-my-loans.md`、`src/items/routes.ts`、`src/loans/routes.ts`、`openapi.yaml` |
 | 5 | Test | CI を入れ、機能 B の実装 Issue を起票して受入テストの観点と期待値に合意する | `.github/workflows/ci.yml`、Issue（`docs/workshop/issues/loan-extension-b1.md` / `-b2.md` の本文） |
 | 6 | Build（2周目） | main から worktree 2本、plan → 実装とテストを同じ PR で | `docs/plans/loan-extension-b1-logic.md` / `-b2-api.md`、`src/loans/domain/extension.ts` / `extension.test.ts`、`src/loans/routes.ts` / `routes.extension.test.ts`、`openapi.yaml` |
-| 7 | Deploy | REVIEW.md、ローカルでの AI レビュー、リリース承認 Hook。deploy ワークフロー、Environments、branch protection は講師のデモで見る | `REVIEW.md`、`.claude/settings.json` |
+| 7 | Deploy | REVIEW.md を入れ、B1・B2 の PR をサブエージェントで AI レビューして直し、CI が緑になってからマージする。branch protection は講師の画面で確認する | `REVIEW.md` |
 | 8 | Maintain | maintain ワークフローを main にマージし、3σ を超える値を追加したブランチで手動起動して、起票された Issue をローカルで診断して intent を書く | `.github/workflows/maintain.yml`、`docs/intents/error-rate-spike.md` |
 
 ワーク1の要望文は `docs/workshop/requests.md` にあります。機能 B の intent と spec、B1・B2 の実装 Issue の本文は講師が用意済みです（`docs/intents/loan-extension.md`、`docs/specs/loan-extension.md`、`docs/workshop/issues/loan-extension-b1.md` / `-b2.md`）。
@@ -204,19 +204,19 @@ curl -H 'Authorization: Bearer u-alice' 'http://localhost:3000/items?available=t
 curl -H 'Authorization: Bearer u-alice' http://localhost:3000/loans/me                                 # L-0001 と L-0006 の2件
 ```
 
-ワーク7では、B2 が B1 の `extendLoan` を呼ぶので、B1 → B2 の順にマージします。
+ワーク7では、B2 が B1 の `extendLoan` を呼ぶので、CI が緑になってから B1 → B2 の順にマージします。
 
 ## Hook の雛形
 
-`.claude/hooks/` のスクリプトは、main の時点では `.claude/settings.json` に登録していません。ワークで参加者が登録します。どのスクリプトも標準入力の JSON を `jq` で読み、ブロックするときは exit 2 で理由を標準エラーに出します。
+`.claude/hooks/` のスクリプトは、main の時点では `.claude/settings.json` に登録していません。`block-generated.sh` と `biome.sh` はワーク3で参加者が登録します。`require-release-approval.sh` はワークでは登録しない参考の雛形で、登録の例は `stage-7-done` にあります。どのスクリプトも標準入力の JSON を `jq` で読み、ブロックするときは exit 2 で理由を標準エラーに出します。
 
 | スクリプト | 種類 | matcher | 内容 | 登録するワーク |
 |---|---|---|---|---|
 | `block-generated.sh` | PreToolUse | `Edit\|Write\|MultiEdit` | `src/generated/` への編集をブロック | 3 |
 | `biome.sh` | PostToolUse | `Edit\|Write\|MultiEdit` | 編集した `*.ts` / `*.json` に Biome をかける | 3 |
-| `require-release-approval.sh` | PreToolUse | `Bash` | `deploy.ts ... production` を `RELEASE_APPROVAL` なしでブロック | 7 |
+| `require-release-approval.sh` | PreToolUse | `Bash` | `deploy.ts ... production` を `RELEASE_APPROVAL` なしでブロック | 参考（`stage-7-done` に登録例） |
 
-登録の例（ワーク7まで終えた状態）です。PreToolUse には要素を**追記**し、既存の要素を上書きしないでください。
+登録の例（`stage-7-done` の状態）です。PreToolUse には要素を**追記**し、既存の要素を上書きしないでください。
 
 ```json
 {
@@ -295,7 +295,7 @@ git checkout origin/stage-7-done -- . ':!.github/workflows/deploy.yml'   # stage
 | `stage-4-done` | A1 の plan（`docs/plans/borrowing-status-a1-search.md`）→ A1 の実装（`GET /items` の絞り込み）→ A2 の plan（`docs/plans/borrowing-status-a2-my-loans.md`）→ A2 の実装（`GET /loans/me`）の順に積んだ状態 | 緑 |
 | `stage-5-done` | `.github/workflows/ci.yml` | 緑 |
 | `stage-6-done` | B1 の plan（`docs/plans/loan-extension-b1-logic.md`）→ B1 の実装とテスト（`extendLoan`）→ B2 の plan（`docs/plans/loan-extension-b2-api.md`）→ B2 の実装とテスト（`POST /loans/:id/extend`）の順に積んだ状態 | 緑 |
-| `stage-7-done` | `REVIEW.md`、`require-release-approval.sh` の Hook 登録（deploy ワークフローは含めない） | 緑 |
+| `stage-7-done` | `REVIEW.md`、`require-release-approval.sh` の Hook 登録の例（deploy ワークフローは含めない） | 緑 |
 | `stage-8-done` | `.github/workflows/maintain.yml`、Maintain の診断例 `docs/intents/error-rate-spike.md` | 緑 |
 
 実装 Issue は stage ブランチでは作られません。ワーク4の Issue は自分で起票し、ワーク5で起票する B1・B2 の Issue は `docs/workshop/issues/` の本文を使います。
